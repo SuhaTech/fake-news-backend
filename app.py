@@ -22,6 +22,7 @@ def safe_nltk_download(resource):
         nltk.download(resource.split('/')[-1])
 
 safe_nltk_download("tokenizers/punkt")
+safe_nltk_download("tokenizers/punkt_tab")   # <-- added for new NLTK versions
 safe_nltk_download("corpora/stopwords")
 safe_nltk_download("corpora/wordnet")
 
