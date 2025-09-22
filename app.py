@@ -41,7 +41,7 @@ def lemmatizing(words):
     return [lemmatizer.lemmatize(w) for w in words]
 
 # ----------------------------
-# Google Drive Model Download (fixed links)
+# Google Drive Model Download
 # ----------------------------
 FILES = {
     "fake_news_model.pkl": "https://drive.google.com/uc?id=1FwTgjUBe4BKXkgJzYlDDf5YYXYn6B6Qx",
@@ -87,6 +87,13 @@ def preprocess_features(title, text):
     )
 
 # ----------------------------
+# Root route for testing
+# ----------------------------
+@app.route("/", methods=["GET"])
+def home():
+    return "🚀 Fake News API is running!", 200
+
+# ----------------------------
 # Predict endpoint
 # ----------------------------
 @app.route("/predict", methods=["POST"])
@@ -117,7 +124,6 @@ def predict():
         proba = model.predict_proba(features)[0]
         confidence = round(max(proba) * 100, 2)
 
-        # Correct mapping
         is_fake = True if str(raw_pred) == "Fake" else False
         label = "Fake" if is_fake else "Real"
 
@@ -142,4 +148,5 @@ def predict():
 # Run server
 # ----------------------------
 if __name__ == "__main__":
-    app.run(port=5000, host="0.0.0.0", debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=True)
