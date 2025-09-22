@@ -41,7 +41,7 @@ def lemmatizing(words):
     return [lemmatizer.lemmatize(w) for w in words]
 
 # ----------------------------
-# Google Drive Model Download
+# Google Drive Model Download (fixed links)
 # ----------------------------
 FILES = {
     "fake_news_model.pkl": "https://drive.google.com/uc?id=1FwTgjUBe4BKXkgJzYlDDf5YYXYn6B6Qx",
@@ -56,23 +56,16 @@ for filename, url in FILES.items():
         gdown.download(url, filename, quiet=False)
 
 # ----------------------------
-# Flask app init
+# App init & load artifacts
 # ----------------------------
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}})  # allow all origins
+CORS(app)
 
-# ----------------------------
-# Load artifacts
-# ----------------------------
 try:
-    with open("text_vectorizer.pkl", "rb") as f:
-        text_vectorizer = pickle.load(f)
-    with open("title_vectorizer.pkl", "rb") as f:
-        title_vectorizer = pickle.load(f)
-    with open("scaler.pkl", "rb") as f:
-        scaler = pickle.load(f)
-    with open("fake_news_model.pkl", "rb") as f:
-        model = pickle.load(f)
+    text_vectorizer = pickle.load(open("text_vectorizer.pkl", "rb"))
+    title_vectorizer = pickle.load(open("title_vectorizer.pkl", "rb"))
+    scaler = pickle.load(open("scaler.pkl", "rb"))
+    model = pickle.load(open("fake_news_model.pkl", "rb"))
     print("✅ Artifacts loaded. Classes:", getattr(model, "classes_", None))
 except Exception as e:
     print("❌ Loading error:", e)
@@ -109,6 +102,7 @@ def predict():
         if not text and not title:
             return jsonify({"error": "No text or title provided"}), 400
 
+        # Build features
         numeric_df = preprocess_features(title, text)
         numeric_scaled = scaler.transform(numeric_df)
         numeric_sparse = csr_matrix(numeric_scaled)
@@ -118,11 +112,19 @@ def predict():
 
         features = hstack([title_feats, text_feats, numeric_sparse])
 
-        raw_pred = model.predict(features)[0]
+        # Model output
+        raw_pred = model.predict(features)[0]            # 'Fake' or 'True'
         proba = model.predict_proba(features)[0]
         confidence = round(max(proba) * 100, 2)
+
+        # Correct mapping
         is_fake = True if str(raw_pred) == "Fake" else False
         label = "Fake" if is_fake else "Real"
+
+        # Debug logs
+        print("🔎 Raw Prediction:", raw_pred)
+        print("🔎 Classes:", getattr(model, "classes_", None))
+        print("🔎 Probabilities:", proba)
 
         return jsonify({
             "isFake": is_fake,
@@ -140,5 +142,4 @@ def predict():
 # Run server
 # ----------------------------
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    app.run(port=5000, host="0.0.0.0", debug=True)
