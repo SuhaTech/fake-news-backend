@@ -1,11 +1,16 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import pickle, traceback, pandas as pd, string, os
+import pickle
+import traceback
+import pandas as pd
 from scipy.sparse import hstack, csr_matrix
+import string
+import nltk
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
-import nltk, gdown
+import gdown
+import os
 
 # ----------------------------
 # Safe NLTK setup
@@ -51,19 +56,23 @@ for filename, url in FILES.items():
         gdown.download(url, filename, quiet=False)
 
 # ----------------------------
-# App init & CORS
+# Flask app init
 # ----------------------------
 app = Flask(__name__)
-CORS(app)  # Allow all origins for now
+CORS(app, resources={r"/*": {"origins": "*"}})  # allow all origins
 
 # ----------------------------
 # Load artifacts
 # ----------------------------
 try:
-    text_vectorizer = pickle.load(open("text_vectorizer.pkl", "rb"))
-    title_vectorizer = pickle.load(open("title_vectorizer.pkl", "rb"))
-    scaler = pickle.load(open("scaler.pkl", "rb"))
-    model = pickle.load(open("fake_news_model.pkl", "rb"))
+    with open("text_vectorizer.pkl", "rb") as f:
+        text_vectorizer = pickle.load(f)
+    with open("title_vectorizer.pkl", "rb") as f:
+        title_vectorizer = pickle.load(f)
+    with open("scaler.pkl", "rb") as f:
+        scaler = pickle.load(f)
+    with open("fake_news_model.pkl", "rb") as f:
+        model = pickle.load(f)
     print("✅ Artifacts loaded. Classes:", getattr(model, "classes_", None))
 except Exception as e:
     print("❌ Loading error:", e)
@@ -71,7 +80,7 @@ except Exception as e:
     text_vectorizer = title_vectorizer = scaler = model = None
 
 # ----------------------------
-# Numeric features
+# Numeric feature preprocessing
 # ----------------------------
 def preprocess_features(title, text):
     chars_before = len(text.replace(" ", ""))
@@ -101,18 +110,17 @@ def predict():
             return jsonify({"error": "No text or title provided"}), 400
 
         numeric_df = preprocess_features(title, text)
-        numeric_sparse = csr_matrix(scaler.transform(numeric_df))
+        numeric_scaled = scaler.transform(numeric_df)
+        numeric_sparse = csr_matrix(numeric_scaled)
 
-        features = hstack([
-            title_vectorizer.transform([title]),
-            text_vectorizer.transform([text]),
-            numeric_sparse
-        ])
+        title_feats = title_vectorizer.transform([title])
+        text_feats = text_vectorizer.transform([text])
+
+        features = hstack([title_feats, text_feats, numeric_sparse])
 
         raw_pred = model.predict(features)[0]
         proba = model.predict_proba(features)[0]
         confidence = round(max(proba) * 100, 2)
-
         is_fake = True if str(raw_pred) == "Fake" else False
         label = "Fake" if is_fake else "Real"
 
@@ -124,11 +132,12 @@ def predict():
         })
 
     except Exception as e:
+        print("❌ Prediction error:", e)
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 # ----------------------------
-# Render-ready
+# Run server
 # ----------------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
